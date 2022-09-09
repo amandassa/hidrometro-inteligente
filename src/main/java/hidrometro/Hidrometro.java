@@ -6,18 +6,19 @@ package hidrometro;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.net.Socket;
-
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
  * @author Amanda
  */
-public class Hidrometro extends Thread {
+public class Hidrometro {
 	private int codigo;
 	private int vazao;
 	private int consumo;
 	private boolean bloqueado;
+//	private Thread escreve;
+//	private Thread escuta;
 	
 	public Hidrometro(int codigo, int vazao) {
 		super();
@@ -25,11 +26,6 @@ public class Hidrometro extends Thread {
 		this.vazao = vazao;
 		this.consumo = 0;
 		this.bloqueado = false;
-		this.start();
-	}
-	
-	public static void main (String [] args) {
-		Hidrometro h = new Hidrometro(1, 2);
 	}
 	
 	/**
@@ -95,19 +91,19 @@ public class Hidrometro extends Thread {
 	/**
 	 * Incrementa o consumo a aprox. cada 10 segundos.
 	 */
-	@Override
-	public void run () {
-		try {
-			while (true) {
-				this.consome();
-				this.enviar(status());
-				sleep(1000);
-			}
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-	}
+//	@Override
+//	public void run () {
+//		try {
+//			while (true) {
+//				this.consome();
+//				this.enviar(status());
+//				sleep(1000);
+//			}
+//		} catch (InterruptedException e) {
+//			// TODO Auto-generated catch block
+//			e.printStackTrace();
+//		}
+//	}
 	
 	/**
 	 * Incrementa o consumo de acordo com a vazão do hidrômetro.
