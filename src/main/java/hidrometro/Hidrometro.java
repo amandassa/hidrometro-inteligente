@@ -3,22 +3,29 @@
  */
 package hidrometro;
 
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
+import java.io.PrintStream;
+import java.io.UnsupportedEncodingException;
+import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URLDecoder;
+import java.net.URLEncoder;
+import java.util.Random;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
 /**
  * @author Amanda
  */
-public class Hidrometro {
+public class Hidrometro extends Thread {
 	private int codigo;
 	private int vazao;
 	private int consumo;
 	private boolean bloqueado;
-//	private Thread escreve;
-//	private Thread escuta;
 	
 	public Hidrometro(int codigo, int vazao) {
 		super();
@@ -26,6 +33,12 @@ public class Hidrometro {
 		this.vazao = vazao;
 		this.consumo = 0;
 		this.bloqueado = false;
+		this.start();
+	}
+	public static void main (String [] args) {
+		Hidrometro h1 = new Hidrometro(new Random().nextInt(20), 2);
+//		Thread t1 = new Thread(h1::escutar);
+//		t1.start();
 	}
 	
 	/**
@@ -43,8 +56,10 @@ public class Hidrometro {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
 		}
-		return jsonObj.toString();
+		String msg = jsonObj.toString();
+		return msg;
 	}
+	
 	
 	/**
 	 * Abre conexão e mantém escuta ao servidor.
@@ -53,19 +68,23 @@ public class Hidrometro {
 	public JSONObject escutar () {
     	// abre socket e aguarda aceite do servidor
 		// esse canal nunca fecha pois o bloqueio/desbloqueio deve ser imediato
-	    try (Socket cliente = new Socket("localhost", 12345)){
-		      ObjectInputStream entrada = new ObjectInputStream(cliente.getInputStream());
-		      String mensagem = (String) entrada.readObject();
+	    try {
+	    	ServerSocket serverTCP = new ServerSocket(codigo);
+	    	Socket cliente = serverTCP.accept();
+	    	BufferedReader is = new BufferedReader(
+					 new InputStreamReader(cliente.getInputStream()));
+	    	String line = is.readLine();
+	        System.out.println("Mensagem do servidor: " + line);
 		      
-		      JSONObject jObject = new JSONObject(mensagem);
+		      JSONObject jObject = new JSONObject(line);
 		      
-		      if (jObject.get("bloqueado").equals("true")) {
+		      if (jObject.get("bloqueado").equals(true)) {
 		    	  this.setBloqueado(true);
+		    	  System.out.println("HIDROMETRO BLOQUEADO!!!!");
 		      } else {
 		    	  this.setBloqueado(false);
 		      }
 		      
-		      System.out.println("Mensagem do servidor: " + mensagem);
 		      return jObject;
 		    }
 		    catch(Exception e) {
@@ -79,31 +98,44 @@ public class Hidrometro {
 	 * @param mensagem String
 	 */
 	public void enviar (String mensagem) {
-	    try (Socket cliente = new Socket("127.0.0.1", 12345)){
-	    	ObjectOutputStream saida = new ObjectOutputStream(cliente.getOutputStream());
-	    	saida.writeObject(mensagem);
-	    	saida.close();
+	    try {
+	    	Socket cliente = new Socket("localhost", 12345);
+	    	PrintStream os = new PrintStream(cliente.getOutputStream(), true);
+	    	os.print(mensagem+"\n");
+	    	os.flush();
+//	    	ObjectOutputStream saida = new ObjectOutputStream(cliente.getOutputStream());
+//	    	saida.writeObject(mensagem);
+//	    	saida.close();		// fecha do lado do cliente
+//	    	saida.flush();
+	    	cliente.close();
 	    } catch(Exception e) {
 	       System.out.println("Erro: " + e.getMessage());
 	    }
 	}
 	
 	/**
-	 * Incrementa o consumo a aprox. cada 10 segundos.
+	 * Incrementa o consumo a aprox. cada 1 segundo.
 	 */
-//	@Override
-//	public void run () {
-//		try {
-//			while (true) {
-//				this.consome();
-//				this.enviar(status());
-//				sleep(1000);
-//			}
-//		} catch (InterruptedException e) {
-//			// TODO Auto-generated catch block
-//			e.printStackTrace();
-//		}
-//	}
+	@Override
+	public void run () {
+		Thread escutar =  new Thread(() -> escutar());
+		try {
+			while (true) {
+				try {
+					escutar.start();
+				} catch (java.lang.IllegalThreadStateException e) {
+					System.out.println("Hidrômetro "+this.codigo+" escutando");
+				}
+				this.consome();
+				Thread enviar = new Thread(() -> enviar(status()));
+				enviar.start();
+				sleep(1000);
+			}
+		} catch (InterruptedException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
 	
 	/**
 	 * Incrementa o consumo de acordo com a vazão do hidrômetro.
