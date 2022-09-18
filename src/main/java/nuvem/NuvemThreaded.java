@@ -10,9 +10,12 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Hashtable;
+import java.util.Iterator;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.regex.Pattern;
 
 import org.apache.jasper.compiler.JavacErrorDetail;
@@ -25,15 +28,36 @@ import org.json.JSONObject;
 public class NuvemThreaded {
 	
 	public static final int PORTA = 12345;
-	public static final int N_CONEXOES = 15;
+	public static final int N_CONEXOES = 8;
 	
-	private Hashtable<Integer, JSONObject> db = new Hashtable<Integer, JSONObject>();
+	private Hashtable<Integer, ArrayList<JSONObject>> db = new Hashtable<Integer, ArrayList<JSONObject>>();
 	
-	public void addToDatabase (JSONObject mensagem) {
+	public boolean addToDatabase (JSONObject mensagem) {
 		try {
-			db.put(Integer.parseInt(mensagem.get("codigo").toString()), mensagem);
+			// se o hidrometro já existe no db (nova contagem de hidrometro)
+				// encontrar arraylist dele
+				// adicionar mensagem à arraylist
+			Object codigo = mensagem.get("codigo");
+			if (db.containsKey(Integer.parseInt(codigo.toString()))) {
+				ArrayList<JSONObject> lista = db.get(codigo);
+				lista.add(mensagem);
+			}
+			// se o hidrometro NÃO consta no db (novo hidrometro)
+				// criar nova arraylist e adicionar mensagem à ela
+				// adicionar arraylist à hashtable
+			else {
+				ArrayList<JSONObject> lista = new ArrayList<JSONObject>();
+				lista.add(mensagem);
+				Integer cod = (Integer) mensagem.get("codigo");
+				db.put(cod, lista);
+			}
+			return true;
 		} catch (NumberFormatException e) {
 			System.out.println(e.getMessage());
+			return false;
+		} catch (Exception e) {
+			System.out.println(e.getMessage());
+			return false;
 		}
 	}
 
@@ -86,7 +110,8 @@ public class NuvemThreaded {
 //							 clientSocket.getOutputStream(), true);
 					 
 					 PrintWriter pw = new PrintWriter(clientSocket.getOutputStream(), true);
-					 
+					 String CRLF = "\r\n";
+
 					 String line = is.readLine();
 					 if ((line) != null) {
 						 // line = mensagem do hidrometro
@@ -99,24 +124,24 @@ public class NuvemThreaded {
 			            	 */
 							String[] req = line.split("/");
 							String[] req2 = req[1].split(" ");
+							int param = Integer.parseInt(req2[0]);
 							switch (req[0]) {
 							case "POST ":	// bloquear hidrometro
 								
 								try {
-									int param = Integer.parseInt(req2[0]);
-									System.out.println("Hidrômetro buscado:\t\t"+db.get(param).get("bloqueado").toString());
-									boolean isBlock = db.get(param).get("bloqueado").equals(true);
+//									System.out.println("Hidrômetro buscado:\t\t"+db.get(param).get("bloqueado").toString());
+//									boolean isBlock = db.get(param).get("bloqueado").equals(true);
 									JSONObject jObject = new JSONObject();
 									/**
 									 * Se o hidrometro já está bloqueado a req POST o desbloqueia
 									 * e vice-versa.
 									 * ISSO PRECISA SER ALTERADO PARA desbloqueio quando a fatura for paga
 									 */
-									if (isBlock) {
-										jObject.put("bloqueado", false);
-									} else {
+//									if (isBlock) {
+//										jObject.put("bloqueado", false);
+//									} else {
 										jObject.put("bloqueado", true);
-									}
+//									}
 									
 									// enviar json com bloqueio para o hidrômetro
 									Socket cliente = new Socket("localhost", param);
@@ -124,15 +149,16 @@ public class NuvemThreaded {
 							    	os.print(jObject.toString());
 							    	os.flush();
 							    	os.close();
-							    	
+							    	// fecha do lado do cliente (o server do hidrometro continua aberto.)
+							    	cliente.close(); 
+
 							    	// enviar res para o cliente socket (HTTP client)
-							    	String CRLF = "\r\n";
 							    	pw.print("HTTP/1.0 200 OK" + CRLF);
 							    	pw.print("Content-type: text/html" + CRLF);
 							    	pw.print("Server-name: Nuvem da concessionaria" + CRLF);
 							    	String res = 
 							    			"<html><head>" +
-							    			 "<title>Nuvem da concessionaria</title></head>\n"+
+							    			 "<title>API da concessionaria</title></head>\n"+
 							    			 "<h1>Bloqueio do hidrometro</h1>"+
 							    			 "<p>O hidrometro ID:"+param+" foi bloqueado com sucesso.</p>";
 							    	pw.print("Content-length: "+res.length()+CRLF);
@@ -158,10 +184,29 @@ public class NuvemThreaded {
 								
 								break;
 							case "GET ":	// ver hidrometro
-								System.out.println("GET REQUEST"+" param: "+req2[0]);
+								System.out.println("GET REQUEST"+" param: "+param);
 								// 1º: mostrar no terminal o historico do hidrometro.
 									// cada indice do db deve corresponder a uma LISTA de registros do hidrometro
 									// iterar sobre a lista e printar cada registro.
+								ArrayList<JSONObject> hidroLista = db.get(param);
+								String res = "<h1>Historico Hidrometro "+param+"</h1>";
+								Iterator<JSONObject> it = hidroLista.iterator();
+								while (it.hasNext()) {
+									res += ("Consumo: "+it.next().get("consumo").toString()+"&nbsp;&#8209;&nbsp;");
+									res += ("Bloquado: "+it.next().get("bloqueado").toString());
+									res += "<br>";
+								}
+								String head = "<html><head>" +
+						    			 "<title>Nuvem da concessionaria</title></head>";
+
+						    	pw.print("HTTP/1.0 200 OK" + CRLF);
+						    	pw.print("Content-type: text/html" + CRLF);
+						    	pw.print("Server-name: API da concessionaria" + CRLF);
+						    	pw.print("Content-length: "+ head.length() + res.length() + CRLF);
+						    	pw.print(CRLF);
+						    	pw.print(head+res);
+						    	pw.flush();
+						    	pw.close();
 								break;
 							default:
 								break;
@@ -169,8 +214,8 @@ public class NuvemThreaded {
 						} else {
 							try {
 								JSONObject my_obj = new JSONObject(line);
-								addToDatabase(my_obj);
-				            	System.out.println("Mensagem do hidrômetro: ");
+								if (addToDatabase(my_obj))
+									System.out.println("Mensagem do hidrômetro: ");
 							} catch (Exception e) {
 								System.out.println("ERRO AO SALVAR NO DB " + e.getMessage());
 								System.out.println("Requisição inválida.");
@@ -182,6 +227,8 @@ public class NuvemThreaded {
 					 is.close();
 					 clientSocket.close();
 					 System.out.println(getName() + " ENDED ");
+				 } catch(NoSuchElementException e) {
+					 System.out.println(e +"\n"+ e.getMessage());
 				 } catch (Exception e) {
 					 System.out.println(getName() + ": IO Error on socket " + e);
 					 return;
