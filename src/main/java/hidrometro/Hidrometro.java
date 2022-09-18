@@ -26,6 +26,7 @@ public class Hidrometro extends Thread {
 	private int vazao;
 	private int consumo;
 	private boolean bloqueado;
+	private final static int TIME = 1000;
 	
 	public Hidrometro(int codigo, int vazao) {
 		super();
@@ -37,8 +38,6 @@ public class Hidrometro extends Thread {
 	}
 	public static void main (String [] args) {
 		Hidrometro h1 = new Hidrometro(new Random().nextInt(20), 2);
-//		Thread t1 = new Thread(h1::escutar);
-//		t1.start();
 	}
 	
 	/**
@@ -74,12 +73,20 @@ public class Hidrometro extends Thread {
 	    	BufferedReader is = new BufferedReader(
 					 new InputStreamReader(cliente.getInputStream()));
 	    	String line = is.readLine();
+	    	is.close();
 	        System.out.println("Mensagem do servidor: " + line);
 		      
+//	    	Socket cliente = new Socket("localhost", 12345);
+//	    	os.close();
+	        
 		      JSONObject jObject = new JSONObject(line);
 		      
 		      if (jObject.get("bloqueado").equals(true)) {
 		    	  this.setBloqueado(true);
+//			    	PrintStream os = new PrintStream(cliente.getOutputStream(), true);
+//			    	os.print("200"+"\r\n");
+//			    	os.flush();
+//		    	  enviar("200");
 		    	  System.out.println("HIDROMETRO BLOQUEADO!!!!");
 		      } else {
 		    	  this.setBloqueado(false);
@@ -129,7 +136,7 @@ public class Hidrometro extends Thread {
 				this.consome();
 				Thread enviar = new Thread(() -> enviar(status()));
 				enviar.start();
-				sleep(1000);
+				sleep(TIME);
 			}
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block

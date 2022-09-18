@@ -7,9 +7,11 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.PrintStream;
+import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.HashMap;
+import java.util.Hashtable;
 import java.util.Map;
 import java.util.regex.Pattern;
 
@@ -25,10 +27,14 @@ public class NuvemThreaded {
 	public static final int PORTA = 12345;
 	public static final int N_CONEXOES = 15;
 	
-	private static Map<Integer, JSONObject> db = new HashMap<Integer, JSONObject>();
+	private Hashtable<Integer, JSONObject> db = new Hashtable<Integer, JSONObject>();
 	
-	public static void addToDatabase (JSONObject mensagem) {
-		db.put(Integer.getInteger(mensagem.get("codigo").toString()), mensagem);
+	public void addToDatabase (JSONObject mensagem) {
+		try {
+			db.put(Integer.parseInt(mensagem.get("codigo").toString()), mensagem);
+		} catch (NumberFormatException e) {
+			System.out.println(e.getMessage());
+		}
 	}
 
 	
@@ -78,15 +84,17 @@ public class NuvemThreaded {
 						 new InputStreamReader(clientSocket.getInputStream()));
 //					 PrintStream os = new PrintStream(
 //							 clientSocket.getOutputStream(), true);
+					 
+					 PrintWriter pw = new PrintWriter(clientSocket.getOutputStream(), true);
+					 
 					 String line = is.readLine();
-					 while ((line) != null) {
+					 if ((line) != null) {
 						 // line = mensagem do hidrometro
 						boolean httpMatcher = Pattern.matches("(\\w+)\\s\\/(\\w*)\\s(HTTP)\\/(\\d.\\d)\\s*?", line);
-			            boolean hidroMatcher = Pattern.matches("\"\\{\\\"(.+?)\\\":(\\w+)\\,?\\\"(.+?)\\\":(\\w+)\\,?\\\"(.+?)\\\":(\\w+)\\,?\\\"(.+?)\\\":(\\w+)\\,?\\}\"", line);
 
 						if (httpMatcher) {
 			            	/**
-			            	 * deve tratar a requisição GET ou PUT e rotas
+			            	 * deve tratar a requisição GET ou POST
 			            	 * -- ver hidrômetro ou bloquear hidrômetro
 			            	 */
 							String[] req = line.split("/");
@@ -96,36 +104,77 @@ public class NuvemThreaded {
 								
 								try {
 									int param = Integer.parseInt(req2[0]);
+									System.out.println("Hidrômetro buscado:\t\t"+db.get(param).get("bloqueado").toString());
+									boolean isBlock = db.get(param).get("bloqueado").equals(true);
 									JSONObject jObject = new JSONObject();
-									jObject.put("bloqueado",true);
+									/**
+									 * Se o hidrometro já está bloqueado a req POST o desbloqueia
+									 * e vice-versa.
+									 * ISSO PRECISA SER ALTERADO PARA desbloqueio quando a fatura for paga
+									 */
+									if (isBlock) {
+										jObject.put("bloqueado", false);
+									} else {
+										jObject.put("bloqueado", true);
+									}
+									
+									// enviar json com bloqueio para o hidrômetro
 									Socket cliente = new Socket("localhost", param);
 							    	PrintStream os = new PrintStream(cliente.getOutputStream(), true);
 							    	os.print(jObject.toString());
 							    	os.flush();
 							    	os.close();
-							    	cliente.close();
+							    	
+							    	// enviar res para o cliente socket (HTTP client)
+							    	String CRLF = "\r\n";
+							    	pw.print("HTTP/1.0 200 OK" + CRLF);
+							    	pw.print("Content-type: text/html" + CRLF);
+							    	pw.print("Server-name: Nuvem da concessionaria" + CRLF);
+							    	String res = 
+							    			"<html><head>" +
+							    			 "<title>Nuvem da concessionaria</title></head>\n"+
+							    			 "<h1>Bloqueio do hidrometro</h1>"+
+							    			 "<p>O hidrometro ID:"+param+" foi bloqueado com sucesso.</p>";
+							    	pw.print("Content-length: "+res.length()+CRLF);
+							    	pw.print(CRLF);
+							    	pw.print(res);
+							    	pw.flush();
+							    	pw.close();
+							    	
+							    	
+							    	// receber confirmação de bloqueio (TCP Protocol)
+//							    	BufferedReader input = new BufferedReader(
+//											 new InputStreamReader(cliente.getInputStream()));
+//							    	String res = input.readLine();
+//							    	System.out.println("RES DO HIDROMETRO "+ res);
+//							    	System.out.println((res == "200") ? "HIDROMETRO "+param+"BLOQUEADO" : "ERRO AO BLOQUEAR HIDRÔMETRO "+param);
+//							    	input.close();
+//							    	cliente.close();
 								} catch (NumberFormatException e) {
 									System.out.println("Parâmetro não numérico não é aceito!!");
 								} catch (Exception e) {
 									System.out.println("Problema ao conectar com hidrômetro (TCP) ");
 								}
 								
-//								System.out.println("POST REQUEST"+" param: "+req2[0]);
 								break;
 							case "GET ":	// ver hidrometro
 								System.out.println("GET REQUEST"+" param: "+req2[0]);
+								// 1º: mostrar no terminal o historico do hidrometro.
+									// cada indice do db deve corresponder a uma LISTA de registros do hidrometro
+									// iterar sobre a lista e printar cada registro.
 								break;
 							default:
 								break;
 							}
-						} else if (hidroMatcher) {
-							JSONObject my_obj = new JSONObject(line);
-							addToDatabase(my_obj);
-			            	System.out.println("Mensagem do hidrômetro: ");
 						} else {
-							/**
-							 * req invalida
-							 */
+							try {
+								JSONObject my_obj = new JSONObject(line);
+								addToDatabase(my_obj);
+				            	System.out.println("Mensagem do hidrômetro: ");
+							} catch (Exception e) {
+								System.out.println("ERRO AO SALVAR NO DB " + e.getMessage());
+								System.out.println("Requisição inválida.");
+							}
 						}
 						 System.out.println(line);
 						 line = is.readLine();

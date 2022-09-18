@@ -29,7 +29,7 @@ public class Nuvem {
 	    try (ServerSocket server = new ServerSocket(12345)) {
 		      // Instancia o ServerSocket ouvindo a porta
 		      System.out.println("Servidor ouvindo a porta 12345");
-		      
+		     
 		        while (true) {
 		        	try (Socket clientSocket = server.accept()) {
 			            InputStreamReader isr =  new InputStreamReader(clientSocket.getInputStream());
