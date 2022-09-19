@@ -90,8 +90,7 @@ public class NuvemThreaded {
 		}
 		
 		public void run() {
-			/**
-			 * Esperar por uma conexão. 
+			/** Esperar por uma conexão. 
 			 * Sincronizado no ServerSocket quando o método accept() é chamado.
 			 */
 			 while (true) {
@@ -127,7 +126,7 @@ public class NuvemThreaded {
 							int param = Integer.parseInt(req2[0]);
 							switch (req[0]) {
 							case "POST ":	// bloquear hidrometro
-								
+								//	ADICIONAR: Verificar se é administrador
 								try {
 //									System.out.println("Hidrômetro buscado:\t\t"+db.get(param).get("bloqueado").toString());
 //									boolean isBlock = db.get(param).get("bloqueado").equals(true);
@@ -184,25 +183,32 @@ public class NuvemThreaded {
 								
 								break;
 							case "GET ":	// ver hidrometro
-								System.out.println("GET REQUEST"+" param: "+param);
+								System.out.println("GET REQUEST param: "+param);
 								// 1º: mostrar no terminal o historico do hidrometro.
 									// cada indice do db deve corresponder a uma LISTA de registros do hidrometro
 									// iterar sobre a lista e printar cada registro.
-								ArrayList<JSONObject> hidroLista = db.get(param);
+								ArrayList<JSONObject> hidroLista;
 								String res = "<h1>Historico Hidrometro "+param+"</h1>";
-								Iterator<JSONObject> it = hidroLista.iterator();
-								while (it.hasNext()) {
-									res += ("Consumo: "+it.next().get("consumo").toString()+"&nbsp;&#8209;&nbsp;");
-									res += ("Bloquado: "+it.next().get("bloqueado").toString());
-									res += "<br>";
+								try {
+									hidroLista = db.get(param);
+									Iterator<JSONObject> it = hidroLista.iterator();
+									while (it.hasNext()) {
+										JSONObject next = it.next();
+										res += ("Consumo: "+next.get("consumo").toString()+"&nbsp;&#8209;&nbsp;"+
+												"Bloquado: "+next.get("bloqueado").toString());
+										res += "<br>";
+									}
+								} catch (Exception e) {
+									e.printStackTrace();
 								}
+								res += "</html>";
 								String head = "<html><head>" +
 						    			 "<title>Nuvem da concessionaria</title></head>";
 
 						    	pw.print("HTTP/1.0 200 OK" + CRLF);
 						    	pw.print("Content-type: text/html" + CRLF);
 						    	pw.print("Server-name: API da concessionaria" + CRLF);
-						    	pw.print("Content-length: "+ head.length() + res.length() + CRLF);
+						    	pw.print("Content-length: "+ (head.length() + res.length()) + CRLF);
 						    	pw.print(CRLF);
 						    	pw.print(head+res);
 						    	pw.flush();
@@ -227,8 +233,6 @@ public class NuvemThreaded {
 					 is.close();
 					 clientSocket.close();
 					 System.out.println(getName() + " ENDED ");
-				 } catch(NoSuchElementException e) {
-					 System.out.println(e +"\n"+ e.getMessage());
 				 } catch (Exception e) {
 					 System.out.println(getName() + ": IO Error on socket " + e);
 					 return;
