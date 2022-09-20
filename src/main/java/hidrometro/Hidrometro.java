@@ -8,6 +8,8 @@ import java.io.InputStreamReader;
 import java.io.PrintStream;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.Random;
 
 import org.json.JSONException;
@@ -21,6 +23,7 @@ public class Hidrometro extends Thread {
 	private int vazao;
 	private int consumo;
 	private boolean bloqueado;
+	private String dataHora;
 	private final static int TIME = 1000;
 	
 	public Hidrometro(int codigo, int vazao) {
@@ -29,6 +32,11 @@ public class Hidrometro extends Thread {
 		this.vazao = vazao;
 		this.consumo = 0;
 		this.bloqueado = false;
+		
+		DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");  
+        LocalDateTime now = LocalDateTime.now();
+        this.dataHora = dtf.format(now);
+        
 		this.start();
 	}
 	public static void main (String [] args) {
@@ -45,6 +53,7 @@ public class Hidrometro extends Thread {
 			jsonObj.put("codigo",this.codigo);
 			jsonObj.put("vazao", this.vazao);
 			jsonObj.put("consumo", this.consumo);
+			jsonObj.put("data", this.dataHora);
 			jsonObj.put("bloqueado", this.bloqueado);
 		} catch (JSONException e) {
 			// TODO Auto-generated catch block
@@ -70,18 +79,10 @@ public class Hidrometro extends Thread {
 	    	String line = is.readLine();
 	    	is.close();
 	        System.out.println("Mensagem do servidor: " + line);
-		      
-//	    	Socket cliente = new Socket("localhost", 12345);
-//	    	os.close();
-	        
 		      JSONObject jObject = new JSONObject(line);
 		      
 		      if (jObject.get("bloqueado").equals(true)) {
 		    	  this.setBloqueado(true);
-//			    	PrintStream os = new PrintStream(cliente.getOutputStream(), true);
-//			    	os.print("200"+"\r\n");
-//			    	os.flush();
-//		    	  enviar("200");
 		    	  System.out.println("HIDROMETRO BLOQUEADO!!!!");
 		      } else {
 		    	  this.setBloqueado(false);
@@ -89,6 +90,10 @@ public class Hidrometro extends Thread {
 		      
 		      return jObject;
 		    }
+	    	catch (JSONException e) {
+	    		System.out.println("Erro: " + e.getMessage());
+	    		System.out.println("Servidor mandou mensagem em formato inválido.");
+	    	}
 		    catch(Exception e) {
 		      System.out.println("Erro: " + e.getMessage());
 		    }

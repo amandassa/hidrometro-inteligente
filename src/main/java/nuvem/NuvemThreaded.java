@@ -3,24 +3,29 @@
  */
 package nuvem;
 
+import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.Hashtable;
 import java.util.Iterator;
-import java.util.Map;
-import java.util.NoSuchElementException;
 import java.util.regex.Pattern;
 
-import org.apache.jasper.compiler.JavacErrorDetail;
-import org.apache.jasper.tagplugins.jstl.core.Param;
+import javax.imageio.ImageIO;
+
 import org.json.JSONObject;
+
+import net.sourceforge.barbecue.Barcode;
+import net.sourceforge.barbecue.BarcodeFactory;
+import net.sourceforge.barbecue.BarcodeImageHandler;
 
 /**
  * @author Amanda Silva
@@ -29,8 +34,14 @@ public class NuvemThreaded {
 	
 	public static final int PORTA = 12345;
 	public static final int N_CONEXOES = 8;
-	
+	public static final int VALOR_M3 = 2;
 	private Hashtable<Integer, ArrayList<JSONObject>> db = new Hashtable<Integer, ArrayList<JSONObject>>();
+	
+	public static BufferedImage generateBarcodeImage(String barcodeText) throws Exception {
+	    Barcode barcode = BarcodeFactory.createEAN13(barcodeText);
+
+	    return BarcodeImageHandler.getImage(barcode);
+	}
 	
 	public boolean addToDatabase (JSONObject mensagem) {
 		try {
@@ -61,6 +72,12 @@ public class NuvemThreaded {
 		}
 	}
 
+	private int mesF (Iterator<JSONObject> it) {
+		String datahora = (String) it.next().get("data");
+		String[] data = datahora.split(" ");
+		String[] mes = data[0].split("/");
+		return Integer.parseInt(mes[1]);
+	}
 	
 	/** Método para iniciar os servidores */
 	 public static void main(String[] av) {
@@ -112,35 +129,33 @@ public class NuvemThreaded {
 					 String CRLF = "\r\n";
 
 					 String line = is.readLine();
+					 // passar a linha pelo matcher
+					 	// se for http, da split no espaço
+					 	// verifica o tamanho do array (3) [0 1 2]
+					 	// da split nas / no indice 1
+					 	// verifica o tamanho do array (tamanho = 2 se tiver rota
+					 	// A rota está no índice 1
+					 
 					 if ((line) != null) {
 						 // line = mensagem do hidrometro
-						boolean httpMatcher = Pattern.matches("(\\w+)\\s\\/(\\w*)\\s(HTTP)\\/(\\d.\\d)\\s*?", line);
+						boolean httpMatcher = Pattern.matches("(\\w+)\\s\\/(\\w*)\\/?(\\w*)?\\s(HTTP)\\/(\\d.\\d)\\s*?", line);
 
 						if (httpMatcher) {
 			            	/**
 			            	 * deve tratar a requisição GET ou POST
 			            	 * -- ver hidrômetro ou bloquear hidrômetro
 			            	 */
-							String[] req = line.split("/");
-							String[] req2 = req[1].split(" ");
-							int param = Integer.parseInt(req2[0]);
+							String[] req = line.split(" ");
+							String[] req2 = req[1].split("/");
+							String rota = null;
+							if (req2.length > 2) rota = req2[2];
+							int param = Integer.parseInt(req2[1]);
 							switch (req[0]) {
-							case "POST ":	// bloquear hidrometro
+							case "POST":	// bloquear hidrometro
 								//	ADICIONAR: Verificar se é administrador
 								try {
-//									System.out.println("Hidrômetro buscado:\t\t"+db.get(param).get("bloqueado").toString());
-//									boolean isBlock = db.get(param).get("bloqueado").equals(true);
 									JSONObject jObject = new JSONObject();
-									/**
-									 * Se o hidrometro já está bloqueado a req POST o desbloqueia
-									 * e vice-versa.
-									 * ISSO PRECISA SER ALTERADO PARA desbloqueio quando a fatura for paga
-									 */
-//									if (isBlock) {
-//										jObject.put("bloqueado", false);
-//									} else {
-										jObject.put("bloqueado", true);
-//									}
+									jObject.put("bloqueado", true);
 									
 									// enviar json com bloqueio para o hidrômetro
 									Socket cliente = new Socket("localhost", param);
@@ -167,14 +182,6 @@ public class NuvemThreaded {
 							    	pw.close();
 							    	
 							    	
-							    	// receber confirmação de bloqueio (TCP Protocol)
-//							    	BufferedReader input = new BufferedReader(
-//											 new InputStreamReader(cliente.getInputStream()));
-//							    	String res = input.readLine();
-//							    	System.out.println("RES DO HIDROMETRO "+ res);
-//							    	System.out.println((res == "200") ? "HIDROMETRO "+param+"BLOQUEADO" : "ERRO AO BLOQUEAR HIDRÔMETRO "+param);
-//							    	input.close();
-//							    	cliente.close();
 								} catch (NumberFormatException e) {
 									System.out.println("Parâmetro não numérico não é aceito!!");
 								} catch (Exception e) {
@@ -182,9 +189,75 @@ public class NuvemThreaded {
 								}
 								
 								break;
-							case "GET ":	// ver hidrometro
-								System.out.println("GET REQUEST param: "+param);
-								// 1º: mostrar no terminal o historico do hidrometro.
+							case "GET":	// ver hidrometro
+								// se ROTA nao é nulo: 
+									// ler qual rota está pedindo
+									// se FATURA ou PAGAR
+								if (rota != null) {
+									rota = rota.toLowerCase();
+									ArrayList<JSONObject> hidroLista;
+									String res = "";
+									switch (rota) {
+									case "fatura":
+										// retorna p/ webclient VALOR E CODIGO DE BARRAS
+										hidroLista = db.get(param);
+										Iterator<JSONObject> it = hidroLista.iterator();
+										int consumoTotal = 0;
+										int mes = mesF(it);
+										while (it.hasNext()) {
+											consumoTotal += Integer.parseInt(it.next().get("consumo").toString());
+										}
+										var valorFatura = (consumoTotal*VALOR_M3);
+										String head = "<html><head>" +
+								    			 "<title>Nuvem da concessionaria</title></head>";
+										res = "<h2>Fatura da conta "+param+"</h2>"+
+												"<p>VALOR: "+valorFatura+",00"+
+												"<br> Referente ao mes "+mes+"</p></html>";
+										
+								    	pw.print("HTTP/1.0 200 OK" + CRLF);
+								    	pw.print("Content-type: text/html" + CRLF);
+								    	pw.print("Server-name: Nuvem da concessionaria" + CRLF);
+								    	pw.print("Content-length: "+ (head.length() + res.length()) + CRLF);
+								    	pw.print(CRLF);
+								    	pw.print(head + res);
+								    	pw.flush();
+								    	pw.close();
+
+										break;
+									case "pagar":
+										// Envia p/ hidrometro json DESBLOQUEADO
+										JSONObject jObject = new JSONObject();
+										jObject.put("bloqueado", false);
+										
+										// enviar json com bloqueio para o hidrômetro
+										Socket cliente = new Socket("localhost", param);
+								    	PrintStream os = new PrintStream(cliente.getOutputStream(), true);
+								    	os.print(jObject.toString());
+								    	os.flush();
+								    	os.close();
+								    	// fecha do lado do cliente (o server do hidrometro continua aberto.)
+								    	cliente.close(); 
+
+								    	// enviar res para o cliente socket (HTTP client)
+								    	pw.print("HTTP/1.0 200 OK" + CRLF);
+								    	pw.print("Content-type: text/html" + CRLF);
+								    	pw.print("Server-name: Nuvem da concessionaria" + CRLF);
+								    	res = "<html><head>" +
+								    			 "<title>API da concessionaria</title></head>\n"+
+								    			 "<h2>Pagamento de fatura</h2>"+
+								    			 "<p>A fatura do cliente "+param+" foi paga com sucesso.</p></html>";
+								    	pw.print("Content-length: "+res.length()+CRLF);
+								    	pw.print(CRLF);
+								    	pw.print(res);
+								    	pw.flush();
+								    	pw.close();
+										break;
+									default:
+										break;
+									}
+								}
+								System.out.println("GET REQUEST param: "+param+" route: "+rota);
+								// 1º: mostrar o historico do hidrometro.
 									// cada indice do db deve corresponder a uma LISTA de registros do hidrometro
 									// iterar sobre a lista e printar cada registro.
 								ArrayList<JSONObject> hidroLista;
@@ -194,7 +267,8 @@ public class NuvemThreaded {
 									Iterator<JSONObject> it = hidroLista.iterator();
 									while (it.hasNext()) {
 										JSONObject next = it.next();
-										res += ("Consumo: "+next.get("consumo").toString()+"&nbsp;&#8209;&nbsp;"+
+										res += (next.get("data").toString()+"&nbsp;&#8209;&nbsp;"+
+												"Consumo: "+next.get("consumo").toString()+"&nbsp;&#8209;&nbsp;"+
 												"Bloquado: "+next.get("bloqueado").toString());
 										res += "<br>";
 									}
