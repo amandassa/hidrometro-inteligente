@@ -11,20 +11,23 @@ import java.net.Socket;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Random;
+import java.util.Scanner;
 
 import org.json.JSONException;
-import org.json.JSONObject;
+import org.json.*;
 
 /**
  * @author Amanda
  */
 public class Hidrometro extends Thread {
+	private final static int TIME = 1000;
+	private final static String NUVEM = "localhost";
 	private int codigo;
 	private int vazao;
+	private int pressao;
 	private int consumo;
 	private boolean bloqueado;
 	private String dataHora;
-	private final static int TIME = 1000;
 	
 	public Hidrometro(int codigo, int vazao) {
 		super();
@@ -32,7 +35,7 @@ public class Hidrometro extends Thread {
 		this.vazao = vazao;
 		this.consumo = 0;
 		this.bloqueado = false;
-		
+		this.pressao = vazao;
 		DateTimeFormatter dtf = DateTimeFormatter.ofPattern("yyyy/MM/dd HH:mm:ss");  
         LocalDateTime now = LocalDateTime.now();
         this.dataHora = dtf.format(now);
@@ -40,7 +43,7 @@ public class Hidrometro extends Thread {
 		this.start();
 	}
 	public static void main (String [] args) {
-		Hidrometro h1 = new Hidrometro(new Random().nextInt(20), 2);
+		Hidrometro h1 = new Hidrometro(new Random().nextInt(20), new Random().nextInt(5));
 	}
 	
 	/**
@@ -52,6 +55,13 @@ public class Hidrometro extends Thread {
 		try {
 			jsonObj.put("codigo",this.codigo);
 			jsonObj.put("vazao", this.vazao);
+			
+			if (this.pressao<this.vazao) {
+				jsonObj.put("vazando", true);
+			} else {
+				jsonObj.put("vazando", false);
+			}
+			
 			jsonObj.put("consumo", this.consumo);
 			jsonObj.put("data", this.dataHora);
 			jsonObj.put("bloqueado", this.bloqueado);
@@ -106,18 +116,28 @@ public class Hidrometro extends Thread {
 	 */
 	public void enviar (String mensagem) {
 	    try {
-	    	Socket cliente = new Socket("localhost", 12345);
+	    	Socket cliente = new Socket(NUVEM, 12345);
 	    	PrintStream os = new PrintStream(cliente.getOutputStream(), true);
 	    	os.print(mensagem+"\n");
 	    	os.flush();
-//	    	ObjectOutputStream saida = new ObjectOutputStream(cliente.getOutputStream());
-//	    	saida.writeObject(mensagem);
-//	    	saida.close();		// fecha do lado do cliente
-//	    	saida.flush();
 	    	cliente.close();
 	    } catch(Exception e) {
 	       System.out.println("Erro: " + e.getMessage());
 	    }
+	}
+	
+	public void simulador () {
+		int leitor;
+		do {
+			System.out.println("Altere a pressão da água\nPressão abaixo da média gera alerta de vazamento");
+			Scanner sc = new Scanner(System.in);
+	        leitor = sc.nextInt();
+			this.pressao = leitor;
+			System.out.println("Pressao alterada para "+this.pressao);
+			System.out.print("/////////////////////////////////////\r\n");
+//			sc.close();
+		} while (leitor!=13);
+//        sc.next();
 	}
 	
 	/**
@@ -125,13 +145,16 @@ public class Hidrometro extends Thread {
 	 */
 	@Override
 	public void run () {
-		Thread escutar =  new Thread(() -> escutar());
-		try {
+		Thread escutar = new Thread(() -> escutar());
+		Thread simular = new Thread(() -> simulador());
+		try { 
 			while (true) {
 				try {
 					escutar.start();
+					simular.start();
 				} catch (java.lang.IllegalThreadStateException e) {
-					System.out.println("Hidrômetro "+this.codigo+" escutando");
+				// caso a thread já esteja em estado de execução
+//					System.out.println("Hidrômetro "+this.codigo+" escutando");
 				}
 				this.consome();
 				Thread enviar = new Thread(() -> enviar(status()));
