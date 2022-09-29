@@ -3,7 +3,6 @@
  */
 package nuvem;
 
-import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -17,27 +16,16 @@ import java.util.Hashtable;
 import java.util.Iterator;
 import java.util.regex.Pattern;
 
-import org.json.JSONObject;
-
-import net.sourceforge.barbecue.Barcode;
-import net.sourceforge.barbecue.BarcodeFactory;
-import net.sourceforge.barbecue.BarcodeImageHandler;
-
+import org.json.*;
 /**
  * @author Amanda Silva
  */
 public class NuvemThreaded {
 	
 	public static final int PORTA = 12345;
-	public static final int N_CONEXOES = 8;
+	public static final int N_CONEXOES = 18;
 	public static final int VALOR_M3 = 2;
 	private Hashtable<Integer, ArrayList<JSONObject>> db = new Hashtable<Integer, ArrayList<JSONObject>>();
-	
-	public static BufferedImage generateBarcodeImage(String barcodeText) throws Exception {
-	    Barcode barcode = BarcodeFactory.createEAN13(barcodeText);
-
-	    return BarcodeImageHandler.getImage(barcode);
-	}
 	
 	public boolean addToDatabase (JSONObject mensagem) {
 		try {
@@ -246,7 +234,7 @@ public class NuvemThreaded {
 										while (it.hasNext()) {
 											consumoTotal += Integer.parseInt(it.next().get("consumo").toString());
 										}
-										var valorFatura = (consumoTotal*VALOR_M3);
+										int valorFatura = (consumoTotal*VALOR_M3);
 										String head = "<html><head>" +
 								    			 "<title>Nuvem da concessionaria</title></head>";
 										res = "<h2>Fatura da conta "+param+"</h2>"+

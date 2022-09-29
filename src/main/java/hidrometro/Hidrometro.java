@@ -20,8 +20,8 @@ import org.json.*;
  * @author Amanda
  */
 public class Hidrometro extends Thread {
-	private final static int TIME = 1000;
-	private final static String NUVEM = "localhost";
+	private final static int TIME = 5000;
+	private final static String NUVEM = "172.16.103.13";
 	private int codigo;
 	private int vazao;
 	private int pressao;
@@ -43,7 +43,7 @@ public class Hidrometro extends Thread {
 		this.start();
 	}
 	public static void main (String [] args) {
-		Hidrometro h1 = new Hidrometro(new Random().nextInt(20), new Random().nextInt(5));
+		Hidrometro h1 = new Hidrometro(new Random().nextInt(20), new Random().nextInt(10));
 	}
 	
 	/**

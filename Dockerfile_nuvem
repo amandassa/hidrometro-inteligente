@@ -1,10 +1,6 @@
 FROM openjdk:11
 EXPOSE 12345
-COPY /src/main/java/nuvem/ /nuvem/
-COPY /build/classes/nuvem /nuvem/
-ENTRYPOINT exec java -cp /libs/*.jar:/build/classes NuvemThreaded.jar
-#WORKDIR /nuvem/
-#RUN javac -d ../build/nuvem -cp /libs/*.jar /src/main/java/nuvem/NuvemThreaded.java
-#ENTRYPOINT exec java -jar NuvemThreaded.jar
-# For Spring-Boot project, use the entrypoint below to reduce Tomcat startup time.
-# ENTRYPOINT exec java $JAVA_OPTS -Djava.security.egd=file:/dev/./urandom -jar nuvem.jar
+WORKDIR /nuvem
+COPY target/nuvem.jar /nuvem/
+COPY libs/json-20220320.jar /nuvem/
+ENTRYPOINT [ "java", "-jar", "nuvem.jar" ]
