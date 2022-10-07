@@ -1,6 +1,0 @@
-FROM openjdk:11
-EXPOSE 12345
-WORKDIR /nuvem
-COPY target/nuvem.jar /nuvem/
-COPY libs/json-20220320.jar /nuvem/
-ENTRYPOINT [ "java", "-jar", "nuvem.jar" ]
